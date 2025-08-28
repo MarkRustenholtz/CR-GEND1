@@ -1003,11 +1003,18 @@ document.getElementById("scanQRCode").addEventListener("click", function() {
 
     Html5Qrcode.getCameras().then(cameras => {
         if (cameras && cameras.length) {
-            const cameraId = cameras[0].id;
+            // Cherche une caméra arrière ("back" ou "rear" dans le label)
+            let backCamera = cameras.find(cam =>
+                cam.label.toLowerCase().includes("back") || 
+                cam.label.toLowerCase().includes("rear")
+            );
+
+            // Si trouvée, utilise-la, sinon prend la première
+            const cameraId = backCamera ? backCamera.id : cameras[0].id;
+
             html5QrCode.start(
-                cameraId,
+                cameraId,  // ← on force la caméra arrière si dispo
                 { fps: 10, qrbox: 250 },
-				facingMode: "environment"
                 qrCodeMessage => {
                     processQRCode(qrCodeMessage);
                     html5QrCode.stop();
@@ -1015,11 +1022,6 @@ document.getElementById("scanQRCode").addEventListener("click", function() {
                 },
                 errorMessage => {
                     console.log("QR scan error:", errorMessage);
-                }
-            );
-        }
-    }).catch(err => {
-        console.log("Impossible d'accéder à la caméra", err);
     });
 });
     // Initialiser la page
