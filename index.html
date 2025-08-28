@@ -641,12 +641,16 @@ function processQRCode(qrText) {
     lines.slice(1).forEach(line => {
         if (line.startsWith("Train")) addToTotal(line, "train");
         if (line.startsWith("Bus")) addToTotal(line, "bus");
-        if (line.startsWith("Vl")) addToTotal(line, "vl");
-        if (line.startsWith("Pl")) addToTotal(line, "pl");
+        if (line.toLowerCase().startsWith("vl")) addToTotal(line, "vl");
+        if (line.toLowerCase().startsWith("pl")) addToTotal(line, "pl");
     });
+
+    updateUI();
+    debounceSave();
 
     alert("QR code scanné et ajouté !");
 }
+
 
 function addToTotal(line, type) {
     const match = line.match(/(\d+)\s*\/\s*(\d+)\s*CV\s*\/\s*(\d+)\s*CF/);
@@ -1126,6 +1130,7 @@ function safeProcessQRCode(decodedText) {
     if (resumeEl) resumeEl.value += decodedText + "\n\n";
   }
 }
+
     // Initialiser la page
     init();
   })();
