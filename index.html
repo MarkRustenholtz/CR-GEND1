@@ -1007,6 +1007,7 @@ document.getElementById("scanQRCode").addEventListener("click", function() {
             html5QrCode.start(
                 cameraId,
                 { fps: 10, qrbox: 250 },
+				facingMode: "environment"
                 qrCodeMessage => {
                     processQRCode(qrCodeMessage);
                     html5QrCode.stop();
