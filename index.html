@@ -996,34 +996,136 @@ if ('serviceWorker' in navigator) {
      }
 	 // === QR Code ===
 
-let scannedNigends = []; // Déclaration globale
+let scannedNigends = [];           // global : déjà scannés
+let html5QrCodeGlobal = null;
+let qrScannerRunning = false;
 
 document.getElementById("scanQRCode").addEventListener("click", function() {
-    const html5QrCode = new Html5Qrcode("qr-reader");
-
-    Html5Qrcode.getCameras().then(cameras => {
-        if (cameras && cameras.length) {
-            // Cherche une caméra arrière ("back" ou "rear" dans le label)
-            let backCamera = cameras.find(cam =>
-                cam.label.toLowerCase().includes("back") || 
-                cam.label.toLowerCase().includes("rear")
-            );
-
-            // Si trouvée, utilise-la, sinon prend la première
-            const cameraId = backCamera ? backCamera.id : cameras[0].id;
-
-            html5QrCode.start(
-                cameraId,  // ← on force la caméra arrière si dispo
-                { fps: 10, qrbox: 250 },
-                qrCodeMessage => {
-                    processQRCode(qrCodeMessage);
-                    html5QrCode.stop();
-                    updateUI(); // Met à jour les compteurs après scan
-                },
-                errorMessage => {
-                    console.log("QR scan error:", errorMessage);
-    });
+  // toggle : si déjà lancé, on arrête; sinon on démarre
+  if (qrScannerRunning) {
+    stopQrScanner();
+  } else {
+    startQrScanner();
+  }
 });
+
+function startQrScanner() {
+  const regionId = "qr-reader";
+  const config = { fps: 10, qrbox: 250 };
+
+  // assure l'existence de la zone et la rend visible
+  const region = document.getElementById(regionId);
+  if (!region) {
+    alert("Element '" + regionId + "' introuvable dans la page.");
+    return;
+  }
+  region.style.display = "block";
+
+  // créer l'instance
+  html5QrCodeGlobal = new Html5Qrcode(regionId);
+
+  // 1) on essaie de récupérer la liste des caméras pour trouver une caméra 'back'
+  Html5Qrcode.getCameras().then(cameras => {
+    console.log("Caméras disponibles :", cameras);
+    // cherche mot-clé back/rear/arrière/env
+    const back = cameras && cameras.length
+      ? cameras.find(c => /back|rear|arrière|arriere|environment/i.test(c.label))
+      : null;
+    const cameraId = back ? back.id : null;
+
+    const onSuccess = (decodedText/*, decodedResult*/) => {
+      console.log("QR lu :", decodedText);
+      safeProcessQRCode(decodedText); // wrapper robuste (voir dessous)
+      // stop automatique après lecture (si tu veux laisser multiple lectures, retire le stop)
+      stopQrScanner();
+      updateUI();
+    };
+    const onError = (err) => {
+      // erreurs de lecture (non bloquantes)
+      // console log utile pour debug
+      // console.log("scan error:", err);
+    };
+
+    // 2) Essayer avec cameraId si trouvée, sinon avec facingMode
+    if (cameraId) {
+      html5QrCodeGlobal.start(cameraId, config, onSuccess, onError)
+        .then(() => {
+          qrScannerRunning = true;
+          console.log("Scanner démarré (cameraId).");
+        })
+        .catch(err => {
+          console.warn("Start cameraId échoué, fallback facingMode :", err);
+          // fallback
+          html5QrCodeGlobal.start({ facingMode: "environment" }, config, onSuccess, onError)
+            .then(()=> { qrScannerRunning = true; console.log("Scanner démarré (facingMode fallback)."); })
+            .catch(err2 => { console.error("Impossible de démarrer la caméra :", err2); alert("Impossible de démarrer la caméra : " + err2); });
+        });
+    } else {
+      html5QrCodeGlobal.start({ facingMode: "environment" }, config, onSuccess, onError)
+        .then(() => {
+          qrScannerRunning = true;
+          console.log("Scanner démarré (facingMode).");
+        })
+        .catch(err => {
+          console.error("Start facingMode échoué :", err);
+          alert("Impossible de démarrer la caméra : " + err);
+        });
+    }
+
+  }).catch(err => {
+    // getCameras a échoué (certains navigateurs/permissions) -> essai direct facingMode
+    console.warn("getCameras() échoué :", err);
+    html5QrCodeGlobal.start({ facingMode: "environment" }, config,
+      decodedText => { safeProcessQRCode(decodedText); stopQrScanner(); updateUI(); },
+      e => { console.log("scan error:", e); })
+      .then(()=> { qrScannerRunning = true; console.log("Scanner démarré (facingMode après échec getCameras)."); })
+      .catch(e => { console.error("Impossible d'accéder à la caméra :", e); alert("Impossible d'accéder à la caméra : " + e); });
+  });
+}
+
+function stopQrScanner() {
+  if (!html5QrCodeGlobal || !qrScannerRunning) {
+    document.getElementById("qr-reader").style.display = "none";
+    qrScannerRunning = false;
+    return;
+  }
+  html5QrCodeGlobal.stop().then(() => {
+    html5QrCodeGlobal.clear(); // nettoie le canvas
+    document.getElementById("qr-reader").style.display = "none";
+    qrScannerRunning = false;
+    console.log("Scanner arrêté.");
+  }).catch(err => {
+    console.warn("Erreur lors de l'arrêt du scanner :", err);
+    qrScannerRunning = false;
+    try { html5QrCodeGlobal.clear(); } catch(e) {}
+    document.getElementById("qr-reader").style.display = "none";
+  });
+}
+
+/* wrapper robuste pour l'ancien processQRCode :
+   - essaie d'extraire un NIGEND si présent pour la déduplication,
+   - sinon utilise tout le texte comme identifiant.
+   - appelle la fonction processQRCode existante si tu l'as ; sinon fait un fallback simple. */
+function safeProcessQRCode(decodedText) {
+  // extraction NIGEND possible (ex: "NIGEND : 265673" ou "NIGEND:265673")
+  const m = decodedText.match(/NIGEND\s*[:\-]?\s*(\d+)/i);
+  const key = m ? m[1] : decodedText.trim();
+
+  if (scannedNigends.includes(key)) {
+    alert("Ce QR code a déjà été scanné !");
+    return;
+  }
+  scannedNigends.push(key);
+
+  // Si tu as déjà une function processQRCode qui attend le texte complet, appelle-la :
+  if (typeof processQRCode === "function") {
+    processQRCode(decodedText);
+  } else {
+    // fallback minimal : ajoute au résumé
+    const resumeEl = document.getElementById("resumeESR");
+    if (resumeEl) resumeEl.value += decodedText + "\n\n";
+  }
+}
     // Initialiser la page
     init();
   })();
