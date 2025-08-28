@@ -625,33 +625,6 @@
         else if(action === 'minus' && state.cf[type] > 0) state.cf[type]--;
       }
 
-function processQRCode(qrText) {
-    const lines = qrText.split("\n").map(l => l.trim()).filter(l => l);
-    const nigendLine = lines[0];
-    const nigend = nigendLine.split(":")[1].trim();
-
-    if (scannedNigends.includes(nigend)) {
-        alert("Ce QR code a déjà été scanné !");
-        return;
-    }
-
-    scannedNigends.push(nigend);
-    document.getElementById("resumeESR").value += qrText + "\n\n";
-
-    lines.slice(1).forEach(line => {
-        if (line.startsWith("Train")) addToTotal(line, "train");
-        if (line.startsWith("Bus")) addToTotal(line, "bus");
-        if (line.toLowerCase().startsWith("vl")) addToTotal(line, "vl");
-        if (line.toLowerCase().startsWith("pl")) addToTotal(line, "pl");
-    });
-
-    updateUI();
-    debounceSave();
-
-    alert("QR code scanné et ajouté !");
-}
-
-
 function addToTotal(line, type) {
     const match = line.match(/(\d+)\s*\/\s*(\d+)\s*CV\s*\/\s*(\d+)\s*CF/);
     if (!match) return;
@@ -1129,6 +1102,33 @@ function safeProcessQRCode(decodedText) {
     const resumeEl = document.getElementById("resumeESR");
     if (resumeEl) resumeEl.value += decodedText + "\n\n";
   }
+  function processQRCode(qrText) {
+    const lines = qrText.split("\n").map(l => l.trim()).filter(l => l);
+    const nigendLine = lines[0];
+    const nigend = nigendLine.split(":")[1].trim();
+
+    if (scannedNigends.includes(nigend)) {
+        alert("Ce QR code a déjà été scanné !");
+        return;
+    }
+
+    scannedNigends.push(nigend);
+    document.getElementById("resumeESR").value += qrText + "\n\n";
+
+    lines.slice(1).forEach(line => {
+    if (line.startsWith("Train")) addToTotal(line, "train");
+    if (line.startsWith("Bus")) addToTotal(line, "bus");
+    if (line.toLowerCase().startsWith("vl")) addToTotal(line, "vl");
+    if (line.toLowerCase().startsWith("pl")) addToTotal(line, "pl");
+    if (line.startsWith("TOTAL MOYENS")) addTotalMoyens(line);
+    if (line.startsWith("TOTAL PERSONNES")) addTotalPersonnes(line);
+    });
+
+    updateUI();
+    debounceSave();
+
+    alert("QR code scanné et ajouté !");
+}
 }
 
     // Initialiser la page
